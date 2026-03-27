@@ -149,12 +149,25 @@ License the packaging format + browser experience generator to other CPG brands.
 
 ---
 
+## Closest Technical Analogue: off-axis-sneaker
+
+[icurtis1/off-axis-sneaker](https://github.com/icurtis1/off-axis-sneaker) is a real-time 3D sneaker viewer using the same head-coupled perspective technique — MediaPipe FaceMesh + Three.js + off-axis camera projection. It proves the concept works in a commercial context (retail product visualization) and adds two refinements worth adopting:
+
+1. **Physical calibration wizard** — user measures screen dimensions + viewing distance once; stored locally to compute accurate real-world head position. Makes the parallax geometrically correct rather than just "close."
+2. **Independent render loops** — MediaPipe and Three.js run decoupled, so face tracking latency never blocks frame rendering.
+
+DepthCrunch can adopt both: the calibration prompt runs once on first scan and is stored in localStorage. The experience gets noticeably more accurate on repeat visits — a meaningful reason to scan again.
+
+The sneaker use case (convert browsers to buyers) is also instructive. If this level of spatial fidelity is convincing enough for purchase decisions, it is more than compelling enough for breakfast table entertainment.
+
+---
+
 ## Credits
 
 - **Original demo:** Xiao Hai (@xiaowo1800)
 - **Concept surfaced by:** Ulrich Buckenlei, VISORIC GmbH
-- **Core tech:** TensorFlow.js + Three.js + browser webcam API
-- **Related prior art:** vivien000/trompeloeil, Shopify WonkaVision, Johnny Lee's 2007 Wii head tracking demo, Daniel Habib / True3D Labs
+- **Core tech:** TensorFlow.js / MediaPipe FaceMesh + Three.js + browser webcam API
+- **Related prior art:** icurtis1/off-axis-sneaker, vivien000/trompeloeil, Shopify WonkaVision, Johnny Lee's 2007 Wii head tracking demo, Daniel Habib / True3D Labs
 
 ---
 
