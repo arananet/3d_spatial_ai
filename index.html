@@ -15,7 +15,7 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0d1a; }
 
-    #c3d { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    #c3d { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; pointer-events: none; }
 
     #fc {
       position: fixed; bottom: 14px; right: 14px;
@@ -48,7 +48,7 @@
     #overlay {
       position: fixed; inset: 0; background: #0d0d1a;
       display: flex; align-items: center; justify-content: center;
-      z-index: 100; font-family: system-ui,sans-serif; color: #fff;
+      z-index: 200; font-family: system-ui,sans-serif; color: #fff;
       -webkit-tap-highlight-color: transparent;
     }
     #overlay.gone { display: none; }
@@ -439,93 +439,82 @@ function loadScript(src) {
 }
 
 // ── Main start flow ───────────────────────────────────────────────────────────
-document.getElementById('btnStart').addEventListener('click', async () => {
-  const btn    = document.getElementById('btnStart');
-  const errEl  = document.getElementById('err');
-  errEl.classList.add('hidden');
-  btn.disabled = true;
-
+// Sync click handler → immediately update UI, then call async startApp().
+// This ensures the card transition happens even if async code fails.
+document.getElementById('btnStart').addEventListener('click', function () {
+  document.getElementById('err').classList.add('hidden');
+  document.getElementById('btnStart').disabled = true;
   document.getElementById('perm-card').classList.add('hidden');
   document.getElementById('load-card').classList.remove('hidden');
-  const msg = document.getElementById('load-msg');
-
-  try {
-    // 1. Check API support
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error('Camera API not available. Open this page in Chrome or Safari over HTTPS.');
-    }
-
-    // 2. Request camera permission explicitly (user gesture required for iOS)
-    msg.textContent = 'Requesting camera permission…';
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'user' },
-        width:  { ideal: 640, max: 1280 },
-        height: { ideal: 480, max: 720  },
-      },
-      audio: false,
-    });
-
-    // 3. Wire stream to video element
-    const vid = document.getElementById('vid');
-    vid.srcObject = stream;
-    vid.playsInline = true;
-    vid.muted = true;
-
-    // 4. Wait for video to be playable
-    msg.textContent = 'Starting camera…';
-    await new Promise((resolve, reject) => {
-      vid.onloadedmetadata = () => vid.play().then(resolve).catch(reject);
-      vid.onerror = () => reject(new Error('Video element error'));
-      setTimeout(() => reject(new Error('Camera start timeout')), 12000);
-    });
-
-    // 5. Load MediaPipe (AFTER camera is live — avoids double-permission on iOS)
-    msg.textContent = 'Loading AI model…';
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
-    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
-
-    // 6. Init FaceMesh
-    msg.textContent = 'Initialising face tracking…';
-    const fm = new window.FaceMesh({
-      locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
-    });
-    fm.setOptions({
-      maxNumFaces: 1, refineLandmarks: true,
-      minDetectionConfidence: .5, minTrackingConfidence: .5,
-    });
-    fm.onResults(handleResults);
-
-    // Show camera preview
-    fc.style.display = 'block';
-    fc.width  = 120;
-    fc.height = 90;
-
-    // 7. Send frames via rAF loop (no MediaPipe Camera utility — avoids double-stream on mobile)
-    let busy = false;
-    (function loop() {
-      requestAnimationFrame(loop);
-      if (busy || vid.readyState < 2 || vid.paused) return;
-      busy = true;
-      fm.send({ image: vid }).catch(() => {}).finally(() => { busy = false; });
-    })();
-
-    // 8. Done
-    document.getElementById('overlay').classList.add('gone');
-    setStatus('Searching…', 'seek');
-
-  } catch (e) {
-    const friendly = e.name === 'NotAllowedError'
-      ? 'Camera permission denied. Tap the camera icon in your browser's address bar to allow access, then reload.'
-      : e.name === 'NotFoundError'
-      ? 'No camera found on this device.'
-      : (e.message || 'Unknown error. Try reloading.');
+  startApp().catch(function (e) {
+    var friendly =
+      e.name === 'NotAllowedError'
+        ? 'Camera permission denied. Allow camera in browser settings, then reload.'
+        : e.name === 'NotFoundError'
+        ? 'No camera found on this device.'
+        : (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)
+        ? 'Camera not available. Use Chrome or Safari over HTTPS.'
+        : (e.message || 'Unknown error — try reloading.');
     showError(friendly);
-  }
+  });
 });
 
+async function startApp() {
+  var vid = document.getElementById('vid');
+  var msg = document.getElementById('load-msg');
+
+  // Guard: needs HTTPS
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw Object.assign(new Error('no mediaDevices'), { name: 'NotSupportedError' });
+  }
+
+  // Camera — must stay inside the user-gesture call stack for iOS Safari
+  msg.textContent = 'Requesting camera…';
+  var stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false,
+  });
+
+  vid.srcObject = stream;
+
+  // Play — handle "metadata already loaded" vs "not yet" to avoid race on Android
+  msg.textContent = 'Starting camera…';
+  await new Promise(function (resolve, reject) {
+    var timer = setTimeout(function () { reject(new Error('Camera timed out')); }, 12000);
+    function tryPlay() { vid.play().then(function () { clearTimeout(timer); resolve(); }).catch(reject); }
+    if (vid.readyState >= 1) { tryPlay(); }
+    else { vid.onloadedmetadata = tryPlay; vid.onerror = function () { clearTimeout(timer); reject(new Error('Video error')); }; }
+  });
+
+  // Load MediaPipe AFTER camera is live (one permission prompt, not two)
+  msg.textContent = 'Loading AI model…';
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+
+  msg.textContent = 'Initialising…';
+  var fm = new window.FaceMesh({ locateFile: function (f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/' + f; } });
+  fm.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: .5, minTrackingConfidence: .5 });
+  fm.onResults(handleResults);
+
+  fc.style.display = 'block';
+  fc.width = 120; fc.height = 90;
+
+  // rAF loop — no MediaPipe Camera utility (avoids double-stream on mobile)
+  var busy = false;
+  (function loop() {
+    requestAnimationFrame(loop);
+    if (busy || vid.readyState < 2 || vid.paused) return;
+    busy = true;
+    fm.send({ image: vid }).catch(function () {}).finally(function () { busy = false; });
+  })();
+
+  document.getElementById('overlay').classList.add('gone');
+  setStatus('Searching\u2026', 'seek');
+}
+
 // ── Boot scene immediately (no camera needed) ─────────────────────────────────
-buildScene();
+// Wrapped so a CDN failure doesn't crash the page and swallow the button listener
+try { buildScene(); } catch (e) { console.error('3D scene failed to init:', e); }
 </script>
 </body>
 </html>
