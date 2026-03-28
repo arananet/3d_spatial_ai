@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>DepthCrunch — Look Deeper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #0d0d1a; }
+
+    #c3d { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+    #fc {
+      position: fixed; bottom: 14px; right: 14px;
+      width: 140px; height: 105px;
+      border-radius: 8px; border: 2px solid rgba(255,140,0,.7);
+      display: none; z-index: 10;
+    }
+
+    #status {
+      position: fixed; top: 14px; left: 14px;
+      display: flex; align-items: center; gap: 7px;
+      background: rgba(0,0,0,.55); backdrop-filter: blur(6px);
+      padding: 6px 14px; border-radius: 999px;
+      color: #fff; font: 600 12px system-ui,sans-serif; z-index: 10;
+    }
+    #dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+    #dot.on       { background: #4ade80; }
+    #dot.seek     { background: #facc15; animation: blink 1s infinite; }
+    @keyframes blink { 50% { opacity: .3; } }
+
+    #hint {
+      position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,.5); backdrop-filter: blur(6px);
+      color: rgba(255,255,255,.75); font: 13px system-ui,sans-serif;
+      padding: 7px 18px; border-radius: 999px;
+      white-space: nowrap; z-index: 10; pointer-events: none;
+    }
+
+    #overlay {
+      position: fixed; inset: 0; background: #0d0d1a;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100; font-family: system-ui,sans-serif; color: #fff;
+    }
+    #overlay.gone { display: none; }
+    .card { text-align: center; max-width: 380px; padding: 2.5rem 2rem; }
+    .logo { font-size: 2.6rem; font-weight: 900; color: #ff8c00; letter-spacing: -1px; line-height: 1.1; margin-bottom: .5rem; }
+    .sub  { color: #888; font-size: .88rem; line-height: 1.55; margin-bottom: 2rem; }
+    .btn  {
+      background: #ff8c00; color: #fff; border: none;
+      padding: .75rem 2rem; border-radius: 999px;
+      font-size: 1rem; font-weight: 700; cursor: pointer; transition: background .15s;
+    }
+    .btn:hover { background: #e07800; }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(255,140,0,.25); border-top-color: #ff8c00;
+      border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 1.4rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<canvas id="c3d"></canvas>
+<video  id="vid" playsinline muted hidden></video>
+<canvas id="fc"></canvas>
+<div id="status"><div id="dot"></div><span id="stxt">Loading…</span></div>
+<div id="hint">Move your head to look around the box</div>
+
+<div id="overlay">
+  <div class="card" id="perm-card">
+    <div class="logo">DEPTH<br>CRUNCH</div>
+    <p class="sub">We use your webcam to track your head&nbsp;position.<br>All AI runs locally — nothing leaves your device.</p>
+    <button class="btn" id="btnStart">Allow Camera &amp; Start</button>
+  </div>
+  <div class="card hidden" id="load-card">
+    <div class="spinner"></div>
+    <div class="logo" style="font-size:1.8rem;margin-bottom:.5rem">DEPTHCRUNCH</div>
+    <p class="sub" id="load-msg">Loading spatial AI…</p>
+  </div>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js"></script>
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const CFG = {
+  screenW:   parseFloat(localStorage.dc_sw  || 34),  // physical cm
+  screenH:   parseFloat(localStorage.dc_sh  || 19),
+  viewDist:  parseFloat(localStorage.dc_vd  || 60),
+  ws:        0.01,   // world-scale: 1 unit = 1 m
+  moveScale: 2.5,
+  smooth:    0.28,
+  near:      0.005,
+  far:       20,
+};
+
+const SW = CFG.screenW * CFG.ws;   // 0.34
+const SH = CFG.screenH * CFG.ws;   // 0.19
+const VD = CFG.viewDist * CFG.ws;  // 0.60
+
+// ── Head-pose state ───────────────────────────────────────────────────────────
+let sp = { x: .5, y: .5, z: 1 };
+let pose = null, tracking = false, lostFrames = 0;
+
+function extractPose(lm) {
+  const li = lm[133], ri = lm[362], no = lm[1], lo = lm[33], ro = lm[263];
+  const fx  = (li.x + ri.x + no.x) / 3;
+  const fy  = (li.y + ri.y + no.y) / 3;
+  const iod = Math.hypot(ri.x - li.x, ri.y - li.y);
+  const ew  = Math.hypot(ro.x - lo.x, ro.y - lo.y);
+  const z   = Math.max(.5, Math.min(2.5, (iod + ew * .5) / .15));
+  return { x: Math.max(.1, Math.min(.9, fx)), y: Math.max(.1, Math.min(.9, fy)), z };
+}
+
+function smoothPose(r) {
+  const f = CFG.smooth;
+  sp.x += f * (r.x - sp.x);
+  sp.y += f * (r.y - sp.y);
+  sp.z += f * (r.z - sp.z);
+  return { ...sp };
+}
+
+// ── Off-axis projection ───────────────────────────────────────────────────────
+function applyOffAxis(cam, p) {
+  const ex = -(p.x - .5) * SW * CFG.moveScale;
+  const ey = -(p.y - .5) * SH * CFG.moveScale;
+  const ez = VD / p.z;
+  if (ez <= 0) return;
+  const nd = CFG.near / ez;
+  cam.projectionMatrix.makePerspective(
+    (-SW / 2 - ex) * nd, (SW / 2 - ex) * nd,
+    ( SH / 2 - ey) * nd, (-SH / 2 - ey) * nd,
+    CFG.near, CFG.far
+  );
+  cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  cam.position.set(ex, ey, ez);
+  cam.lookAt(ex, ey, 0);
+}
+
+// ── Canvas texture helpers ────────────────────────────────────────────────────
+function mkCtx(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+
+function rrect(ctx, x, y, w, h, r) {
+  if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); }
+  else               { ctx.rect(x, y, w, h); }
+}
+
+function wrapText(ctx, text, x, y, maxW, lineH) {
+  const words = text.split(' ');
+  let line = '';
+  for (const w of words) {
+    const t = line + w + ' ';
+    if (ctx.measureText(t).width > maxW && line) {
+      ctx.fillText(line.trim(), x, y); y += lineH; line = w + ' ';
+    } else { line = t; }
+  }
+  if (line.trim()) ctx.fillText(line.trim(), x, y);
+}
+
+// Front face ──────────────────────────────────────────────────────────────────
+function makeFrontTex() {
+  const W = 320, H = 1008;
+  const [c, x] = mkCtx(W, H);
+
+  const g = x.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#ff5500'); g.addColorStop(.55, '#ffaa00'); g.addColorStop(1, '#ff3300');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+
+  // wavy highlight
+  x.beginPath();
+  x.moveTo(0, H * .13);
+  x.bezierCurveTo(W * .4, H * .08, W * .6, H * .19, W, H * .14);
+  x.lineTo(W, H * .20);
+  x.bezierCurveTo(W * .6, H * .25, W * .4, H * .14, 0, H * .19);
+  x.closePath(); x.fillStyle = 'rgba(255,255,255,.1)'; x.fill();
+
+  // brand name
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillStyle = '#fff';
+  x.font = `900 ${W * .155}px 'Arial Black',Impact,sans-serif`;
+  x.shadowColor = 'rgba(0,0,0,.25)'; x.shadowBlur = 6; x.shadowOffsetY = 3;
+  x.fillText('DEPTH',  W / 2, H * .10);
+  x.fillText('CRUNCH', W / 2, H * .18);
+  x.shadowBlur = 0; x.shadowOffsetY = 0;
+
+  // sun mascot
+  const mx = W / 2, my = H * .46, R = W * .30;
+  x.save(); x.translate(mx, my);
+  for (let i = 0; i < 12; i++) {
+    x.rotate(Math.PI * 2 / 12);
+    x.beginPath();
+    x.moveTo(R * .78, 0); x.lineTo(R * 1.08, -R * .07);
+    x.lineTo(R * 1.18, 0); x.lineTo(R * 1.08,  R * .07);
+    x.closePath(); x.fillStyle = '#ffe85a'; x.fill();
+  }
+  x.restore();
+
+  x.beginPath(); x.arc(mx, my, R * .72, 0, Math.PI * 2);
+  x.fillStyle = '#ffe85a'; x.fill();
+  x.strokeStyle = '#ff8800'; x.lineWidth = 5; x.stroke();
+
+  // eyes
+  x.fillStyle = '#333';
+  x.beginPath(); x.ellipse(mx - R * .22, my - R * .09, R * .09, R * .12, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(mx + R * .22, my - R * .09, R * .09, R * .12, 0, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#fff';
+  x.beginPath(); x.arc(mx - R * .17, my - R * .14, R * .033, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.arc(mx + R * .27, my - R * .14, R * .033, 0, Math.PI * 2); x.fill();
+
+  // smile
+  x.beginPath(); x.arc(mx, my + R * .06, R * .34, .18, Math.PI - .18);
+  x.strokeStyle = '#333'; x.lineWidth = 8; x.lineCap = 'round'; x.stroke();
+
+  // cheeks
+  x.globalAlpha = .38; x.fillStyle = '#ff5050';
+  x.beginPath(); x.ellipse(mx - R * .46, my + R * .12, R * .14, R * .10, 0, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.ellipse(mx + R * .46, my + R * .12, R * .14, R * .10, 0, 0, Math.PI * 2); x.fill();
+  x.globalAlpha = 1;
+
+  // name badge
+  x.fillStyle = 'rgba(0,0,0,.18)';
+  x.beginPath(); rrect(x, W * .25, H * .67, W * .50, H * .055, 8); x.closePath(); x.fill();
+  x.fillStyle = '#fff'; x.font = `bold ${W * .07}px Arial,sans-serif`;
+  x.fillText('SUNNY', W / 2, H * .698);
+
+  // product line
+  x.font = `bold ${W * .058}px Arial,sans-serif`;
+  x.fillText('HONEY OAT',   W / 2, H * .778);
+  x.fillText('CLUSTERS',    W / 2, H * .828);
+
+  x.fillStyle = 'rgba(255,255,255,.8)';
+  x.font = `italic ${W * .046}px Georgia,serif`;
+  x.fillText('"Look Deeper"', W / 2, H * .876);
+
+  x.fillStyle = 'rgba(0,0,0,.3)'; x.fillRect(0, H * .915, W, H * .085);
+  x.fillStyle = '#fff'; x.font = `${W * .038}px Arial,sans-serif`;
+  x.fillText('NET WT 12 OZ (340g)', W / 2, H * .958);
+
+  return new THREE.CanvasTexture(c);
+}
+
+// Back face ───────────────────────────────────────────────────────────────────
+function makeBackTex() {
+  const W = 320, H = 1008;
+  const [c, x] = mkCtx(W, H);
+
+  x.fillStyle = '#fff9f2'; x.fillRect(0, 0, W, H);
+
+  x.fillStyle = '#ff6600'; x.fillRect(0, 0, W, H * .11);
+  x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = `bold ${W * .072}px 'Arial Black',sans-serif`;
+  x.fillText('HOW THIS WORKS', W / 2, H * .055);
+
+  const steps = [
+    { e: '📸', t: 'Scan the QR code',    d: 'Point your phone at the QR on the side panel.' },
+    { e: '🧠', t: 'AI tracks your head', d: 'TensorFlow.js detects 468 face landmarks locally, 60× per second.' },
+    { e: '👁️', t: 'Three.js shifts view', d: 'Camera perspective updates in real time based on your position.' },
+    { e: '✨', t: 'Move your head',       d: 'Lean left, right, forward or back — the box responds in 3D.' },
+  ];
+
+  steps.forEach((s, i) => {
+    const cy = H * (.18 + i * .185);
+    x.fillStyle = i % 2 === 0 ? '#fff3e0' : '#fff';
+    x.beginPath(); rrect(x, W * .04, cy - H * .078, W * .92, H * .145, 10);
+    x.closePath(); x.fill();
+    x.strokeStyle = '#f0e0cc'; x.lineWidth = 1.5; x.stroke();
+
+    x.font = `${W * .09}px serif`; x.textAlign = 'left'; x.fillStyle = '#333';
+    x.fillText(s.e, W * .08, cy + H * .005);
+
+    x.fillStyle = '#222'; x.font = `bold ${W * .05}px Arial,sans-serif`;
+    x.fillText(s.t, W * .26, cy - H * .03);
+    x.fillStyle = '#666'; x.font = `${W * .037}px Arial,sans-serif`;
+    wrapText(x, s.d, W * .26, cy + H * .012, W * .65, H * .038);
+  });
+
+  // privacy badge
+  x.fillStyle = '#22c55e';
+  x.beginPath(); rrect(x, W * .04, H * .905, W * .92, H * .07, 10); x.closePath(); x.fill();
+  x.fillStyle = '#fff'; x.textAlign = 'center';
+  x.font = `bold ${W * .042}px Arial,sans-serif`;
+  x.fillText('🔒 On-device only — zero data sent', W / 2, H * .942);
+
+  return new THREE.CanvasTexture(c);
+}
+
+// Side faces ──────────────────────────────────────────────────────────────────
+function makeSideTex(label, c1, c2) {
+  const W = 200, H = 1008;
+  const [cv, x] = mkCtx(W, H);
+  const g = x.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  x.fillStyle = 'rgba(255,255,255,.13)';
+  x.fillRect(W * .08, 0, W * .12, H);
+  x.fillRect(W * .80, 0, W * .12, H);
+  x.save();
+  x.translate(W / 2, H / 2); x.rotate(-Math.PI / 2);
+  x.fillStyle = 'rgba(255,255,255,.85)';
+  x.font = `bold ${H * .055}px 'Arial Black',Impact,sans-serif`;
+  x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(label, 0, 0);
+  x.restore();
+  return new THREE.CanvasTexture(cv);
+}
+
+// Top / Bottom ────────────────────────────────────────────────────────────────
+function makeTopTex() {
+  const W = 400, H = 160;
+  const [c, x] = mkCtx(W, H);
+  x.fillStyle = '#ff8800'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = `bold ${H * .52}px 'Arial Black',Impact,sans-serif`;
+  x.fillText('DEPTHCRUNCH', W / 2, H / 2);
+  return new THREE.CanvasTexture(c);
+}
+
+function makeBotTex() {
+  const W = 400, H = 160;
+  const [c, x] = mkCtx(W, H);
+  x.fillStyle = '#cc4400'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#fff';
+  let bx = W * .2;
+  while (bx < W * .8) {
+    const bw = Math.random() * 2.5 + 1;
+    x.fillRect(bx, H * .15, bw, H * .55);
+    bx += bw + Math.random() * 3.5 + 1;
+  }
+  x.font = `${H * .15}px monospace`; x.textAlign = 'center'; x.textBaseline = 'top';
+  x.fillText('0 12345 67890 5', W / 2, H * .73);
+  return new THREE.CanvasTexture(c);
+}
+
+// ── Three.js scene ────────────────────────────────────────────────────────────
+let scene, camera, renderer, autoAngle = 0, useOffAxis = false;
+
+function buildScene() {
+  const canvas = document.getElementById('c3d');
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xfdf0d5);
+  scene.fog = new THREE.FogExp2(0xfdf0d5, 1.5);
+
+  camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, CFG.near, CFG.far);
+  camera.position.set(0, 0, VD);
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0xffe8c0, .75));
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.1);
+  sun.position.set(.8, 1.5, 1.5); sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xc8d8ff, .35);
+  fill.position.set(-1, -.5, .8); scene.add(fill);
+
+  // Back wall
+  const wall = new THREE.Mesh(
+    new THREE.PlaneGeometry(3, 2),
+    new THREE.MeshLambertMaterial({ color: 0xffe5b8 })
+  );
+  wall.position.z = -0.55; scene.add(wall);
+
+  // Table surface
+  const table = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5, 1),
+    new THREE.MeshLambertMaterial({ color: 0x9a6230 })
+  );
+  table.rotation.x = -Math.PI / 2;
+  table.position.y = -0.108; table.receiveShadow = true; scene.add(table);
+
+  // Table front edge
+  const edge = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, .008, .005),
+    new THREE.MeshLambertMaterial({ color: 0x7a4a18 })
+  );
+  edge.position.set(0, -0.104, .35); scene.add(edge);
+
+  // ── Cereal box ──
+  // Material index: 0=+X(right) 1=-X(left) 2=+Y(top) 3=-Y(bot) 4=+Z(front) 5=-Z(back)
+  const BW = 0.044, BH = 0.145, BD = 0.018;
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(BW, BH, BD),
+    [
+      new THREE.MeshLambertMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200') }),
+      new THREE.MeshLambertMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200') }),
+      new THREE.MeshLambertMaterial({ map: makeTopTex() }),
+      new THREE.MeshLambertMaterial({ map: makeBotTex() }),
+      new THREE.MeshLambertMaterial({ map: makeFrontTex() }),
+      new THREE.MeshLambertMaterial({ map: makeBackTex() }),
+    ]
+  );
+  box.position.set(0, -0.108 + BH / 2, -0.06);
+  box.castShadow = true; scene.add(box);
+
+  // Bowl
+  const bowl = new THREE.Mesh(
+    new THREE.SphereGeometry(.038, 20, 10, 0, Math.PI * 2, 0, Math.PI * .55),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide })
+  );
+  bowl.rotation.x = Math.PI;
+  bowl.position.set(.105, -0.072, 0.05); bowl.castShadow = true; scene.add(bowl);
+
+  const milk = new THREE.Mesh(
+    new THREE.CylinderGeometry(.036, .030, .008, 20),
+    new THREE.MeshLambertMaterial({ color: 0xf5f5f5 })
+  );
+  milk.position.set(.105, -0.068, 0.05); scene.add(milk);
+
+  // Spoon
+  const spoon = new THREE.Mesh(
+    new THREE.CapsuleGeometry(.005, .07, 4, 8),
+    new THREE.MeshLambertMaterial({ color: 0xd0d0d0 })
+  );
+  spoon.position.set(.155, -0.100, 0.09);
+  spoon.rotation.z = .45; spoon.rotation.x = .1;
+  spoon.castShadow = true; scene.add(spoon);
+
+  window.addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    if (!useOffAxis) { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
+  });
+
+  tick();
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (tracking && pose) {
+    useOffAxis = true;
+    applyOffAxis(camera, pose);
+  } else {
+    useOffAxis = false;
+    autoAngle += .004;
+    camera.position.set(Math.sin(autoAngle) * .04, 0, VD);
+    camera.lookAt(0, 0, 0);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  }
+  renderer.render(scene, camera);
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+const $dot  = document.getElementById('dot');
+const $stxt = document.getElementById('stxt');
+function setStatus(txt, cls = '') { $stxt.textContent = txt; $dot.className = cls; }
+
+// ── MediaPipe setup ───────────────────────────────────────────────────────────
+const vid = document.getElementById('vid');
+const fc  = document.getElementById('fc');
+const fcx = fc.getContext('2d');
+
+function loadScript(src) {
+  return new Promise((ok, err) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = err;
+    document.head.appendChild(s);
+  });
+}
+
+async function startTracking() {
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js');
+  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+
+  fc.style.display = 'block';
+  fc.width = 140; fc.height = 105;
+
+  const fm = new window.FaceMesh({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+  });
+  fm.setOptions({
+    maxNumFaces: 1, refineLandmarks: true,
+    minDetectionConfidence: .5, minTrackingConfidence: .5
+  });
+
+  fm.onResults(res => {
+    fcx.clearRect(0, 0, 140, 105);
+    // mirrored preview
+    fcx.save(); fcx.scale(-1, 1); fcx.translate(-140, 0);
+    fcx.drawImage(res.image, 0, 0, 140, 105);
+    fcx.restore();
+
+    if (res.multiFaceLandmarks && res.multiFaceLandmarks.length > 0) {
+      const lm = res.multiFaceLandmarks[0];
+      fcx.fillStyle = 'rgba(0,255,120,.5)';
+      for (const p of lm) {
+        fcx.beginPath();
+        fcx.arc((1 - p.x) * 140, p.y * 105, .9, 0, Math.PI * 2);
+        fcx.fill();
+      }
+      pose = smoothPose(extractPose(lm));
+      tracking = true; lostFrames = 0;
+      setStatus('Tracking', 'on');
+    } else {
+      if (++lostFrames > 8) { tracking = false; setStatus('Searching…', 'seek'); }
+    }
+  });
+
+  const cam = new window.Camera(vid, {
+    onFrame: async () => { await fm.send({ image: vid }); },
+    width: 640, height: 480, facingMode: 'user'
+  });
+  cam.start();
+  setStatus('Searching…', 'seek');
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+buildScene();
+
+document.getElementById('btnStart').addEventListener('click', async () => {
+  document.getElementById('perm-card').classList.add('hidden');
+  document.getElementById('load-card').classList.remove('hidden');
+  const msg = document.getElementById('load-msg');
+  try {
+    msg.textContent = 'Requesting camera…';
+    await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    msg.textContent = 'Loading AI model…';
+    await startTracking();
+    document.getElementById('overlay').classList.add('gone');
+  } catch (e) {
+    msg.textContent = 'Camera error: ' + e.message + '. Allow access and refresh.';
+  }
+});
+</script>
+</body>
+</html>
