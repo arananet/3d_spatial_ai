@@ -108,10 +108,26 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js"></script>
 <script>
 'use strict';
 
+// ── Load Three.js dynamically with CDN fallback ───────────────────────────────
+function loadThreeJs(cb) {
+  var cdns = [
+    'https://unpkg.com/three@0.162.0/build/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js',
+  ];
+  var i = 0;
+  function next() {
+    if (i >= cdns.length) { cb(new Error('Three.js failed to load from all CDNs')); return; }
+    var s = document.createElement('script');
+    s.src = cdns[i++];
+    s.onload = function () { cb(null); };
+    s.onerror = next;
+    document.head.appendChild(s);
+  }
+  next();
+}
 // ── Config ────────────────────────────────────────────────────────────────────
 const CFG = {
   screenW:  parseFloat(localStorage.dc_sw  || 34),
@@ -309,19 +325,15 @@ function buildScene() {
   const canvas = document.getElementById('c3d');
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xfdf0d5);
-  scene.fog = new THREE.FogExp2(0xfdf0d5, 1.5);
+  scene.fog = new THREE.FogExp2(0xfdf0d5, 0.25);
   camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, CFG.near, CFG.far);
   camera.position.set(0, 0, VD);
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-  scene.add(new THREE.AmbientLight(0xffe8c0, .75));
-  const sun = new THREE.DirectionalLight(0xfff4e0, 1.1);
-  sun.position.set(.8,1.5,1.5); sun.castShadow=true;
-  sun.shadow.mapSize.set(1024,1024); scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xffe8c0, .85));
+  const sun = new THREE.DirectionalLight(0xfff4e0, 1.2);
+  sun.position.set(.8,1.5,1.5); scene.add(sun);
   const fill = new THREE.DirectionalLight(0xc8d8ff, .35);
   fill.position.set(-1,-.5,.8); scene.add(fill);
 
@@ -348,23 +360,23 @@ function buildScene() {
     new THREE.MeshLambertMaterial({map:makeBackTex()}),
   ]);
   box.position.set(0,-0.108+BH/2,-0.06);
-  box.castShadow=true; scene.add(box);
+  scene.add(box);
 
   const bowl = new THREE.Mesh(
     new THREE.SphereGeometry(.038,20,10,0,Math.PI*2,0,Math.PI*.55),
     new THREE.MeshLambertMaterial({color:0xffffff,side:THREE.DoubleSide}));
   bowl.rotation.x=Math.PI; bowl.position.set(.105,-0.072,0.05);
-  bowl.castShadow=true; scene.add(bowl);
+  scene.add(bowl);
 
   const milk = new THREE.Mesh(new THREE.CylinderGeometry(.036,.030,.008,20),
     new THREE.MeshLambertMaterial({color:0xf5f5f5}));
   milk.position.set(.105,-0.068,0.05); scene.add(milk);
 
-  const spoon = new THREE.Mesh(new THREE.CapsuleGeometry(.005,.07,4,8),
+  const spoon = new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.09,8),
     new THREE.MeshLambertMaterial({color:0xd0d0d0}));
   spoon.position.set(.155,-0.100,0.09);
   spoon.rotation.z=.45; spoon.rotation.x=.1;
-  spoon.castShadow=true; scene.add(spoon);
+  scene.add(spoon);
 
   window.addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
@@ -513,8 +525,15 @@ async function startApp() {
 }
 
 // ── Boot scene immediately (no camera needed) ─────────────────────────────────
-// Wrapped so a CDN failure doesn't crash the page and swallow the button listener
-try { buildScene(); } catch (e) { console.error('3D scene failed to init:', e); }
+// Load Three.js then boot scene — CDN failure shows a message but doesn't block the button
+loadThreeJs(function (err) {
+  if (err) {
+    console.error('Three.js load failed:', err);
+    document.getElementById('c3d').style.background = '#1a0a00';
+    return;
+  }
+  try { buildScene(); } catch (e) { console.error('Scene init failed:', e); }
+});
 </script>
 </body>
 </html>
