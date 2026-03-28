@@ -3,6 +3,8 @@ FROM nginx:alpine
 RUN apk add --no-cache gettext
 
 COPY index.html /usr/share/nginx/html/index.html
+COPY manifest.json /usr/share/nginx/html/manifest.json
+COPY icon.svg /usr/share/nginx/html/icon.svg
 
 # Write nginx config template using single-quoted string so
 # ${PORT} and $uri are stored literally (not expanded at build time)
