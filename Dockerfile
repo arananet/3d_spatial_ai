@@ -1,12 +1,24 @@
 FROM nginx:alpine
 
+RUN apk add --no-cache gettext
+
 COPY index.html /usr/share/nginx/html/index.html
 
-# At runtime, replace nginx's default port 80 with Railway's $PORT
-RUN printf '#!/bin/sh\n\
-PORT=${PORT:-8080}\n\
-sed -i "s/listen 80;/listen ${PORT};/g" /etc/nginx/conf.d/default.conf\n\
-exec nginx -g "daemon off;"\n' > /start.sh && chmod +x /start.sh
+# Write nginx config template using single-quoted string so
+# ${PORT} and $uri are stored literally (not expanded at build time)
+RUN printf 'server {\n\
+    listen ${PORT};\n\
+    server_name _;\n\
+    root /usr/share/nginx/html;\n\
+    index index.html;\n\
+    location / {\n\
+        try_files $uri $uri/ /index.html;\n\
+    }\n\
+}\n' > /tmp/nginx.template
 
+ENV PORT=8080
 EXPOSE 8080
-CMD ["/start.sh"]
+
+# envsubst '$PORT' only substitutes ${PORT}, leaving nginx's $uri intact
+CMD ["/bin/sh", "-c", \
+  "envsubst '$PORT' < /tmp/nginx.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
