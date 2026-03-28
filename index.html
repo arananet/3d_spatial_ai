@@ -111,11 +111,12 @@
 <script>
 'use strict';
 
-// ── Load Three.js dynamically with CDN fallback ───────────────────────────────
+// ── Load Three.js — local copy first (served by Railway nginx), then CDN fallbacks ──
 function loadThreeJs(cb) {
   var cdns = [
-    'https://unpkg.com/three@0.162.0/build/three.min.js',
-    'https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js',
+    '/three.min.js',                                                    // self-hosted (most reliable)
+    'https://unpkg.com/three@0.162.0/build/three.min.js',              // CDN fallback 1
+    'https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js',   // CDN fallback 2
   ];
   var i = 0;
   function next() {

@@ -1,10 +1,15 @@
 FROM nginx:alpine
 
-RUN apk add --no-cache gettext
+RUN apk add --no-cache gettext curl
 
-COPY index.html /usr/share/nginx/html/index.html
+# Download Three.js at build time so the browser loads it from our own server.
+# This eliminates CDN dependency on the client's network entirely.
+RUN curl -sL https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js \
+      -o /usr/share/nginx/html/three.min.js
+
+COPY index.html  /usr/share/nginx/html/index.html
 COPY manifest.json /usr/share/nginx/html/manifest.json
-COPY icon.svg /usr/share/nginx/html/icon.svg
+COPY icon.svg    /usr/share/nginx/html/icon.svg
 
 # Write nginx config template using single-quoted string so
 # ${PORT} and $uri are stored literally (not expanded at build time)
