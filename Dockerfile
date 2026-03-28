@@ -1,12 +1,16 @@
 FROM node:22-alpine AS deps
 WORKDIR /build
-RUN npm install three@0.162.0 --no-save
+# npm package has three.module.js (ESM) but no UMD three.min.js — bundle it ourselves
+RUN npm install three@0.162.0 esbuild --no-save && \
+    node_modules/.bin/esbuild --bundle --format=iife --global-name=THREE \
+      node_modules/three/build/three.module.js \
+      --outfile=three.min.js --minify
 
 FROM nginx:alpine
 RUN apk add --no-cache gettext
 
-# Copy Three.js from npm (checksum-verified, never an HTML error page)
-COPY --from=deps /build/node_modules/three/build/three.min.js /usr/share/nginx/html/three.min.js
+# Copy bundled Three.js (IIFE with global THREE, equivalent to UMD build)
+COPY --from=deps /build/three.min.js /usr/share/nginx/html/three.min.js
 
 COPY index.html    /usr/share/nginx/html/index.html
 COPY manifest.json /usr/share/nginx/html/manifest.json
