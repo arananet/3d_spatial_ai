@@ -97,8 +97,9 @@ function buildScene() {
   underGlow.position.set(0, 0.34, -0.2);
   scene.add(underGlow);
 
-  // Real cereal box proportions: ~20cm wide × 30cm tall × 6.5cm deep
-  const BW = 0.20; const BH = 0.30; const BD = 0.065;
+  // Cereal box proportions that fit the off-axis frustum (SH=0.19m = full portrait height)
+  // BH=0.16 ≈ 84% of SH → fills screen nicely without overflowing
+  const BW = 0.13; const BH = 0.16; const BD = 0.040;
   const heroBox = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), [
     new THREE.MeshStandardMaterial({ map: makeSideTex('DEPTHCRUNCH', '#1255b8', '#0a3a8a'), roughness: 0.5, metalness: 0.08 }),
     new THREE.MeshStandardMaterial({ map: makeSideTex('DEPTHCRUNCH', '#1255b8', '#0a3a8a'), roughness: 0.5, metalness: 0.08 }),
@@ -107,11 +108,12 @@ function buildScene() {
     new THREE.MeshStandardMaterial({ map: makeFrontTex(), roughness: 0.32, metalness: 0.1 }),
     new THREE.MeshStandardMaterial({ map: makeBackTex(), roughness: 0.35, metalness: 0.08 }),
   ]);
-  heroBox.position.set(0.05, -0.11 + BH / 2, -0.04);
+  heroBox.position.set(0, -0.11 + BH / 2, -0.02);
   heroBox.castShadow = true;
   heroBox.receiveShadow = true;
   scene.add(heroBox);
 
+  // Variant boxes: smaller + further behind so they don't bleed off-screen on mobile
   const variantBoxes = [
     {
       title: 'SKYLINE LOOPS',
@@ -120,13 +122,13 @@ function buildScene() {
       brand: 'Kellogg Studio',
       gradient: ['#ff7a36', '#ffbe5c'],
       short: 'SKYLINE',
-      width: 0.15,
-      height: 0.26,
-      depth: 0.055,
+      width: 0.10,
+      height: 0.13,
+      depth: 0.032,
       topColor: 0xfff0d0,
       bottomColor: 0xcc5a29,
-      position: { x: -0.28, y: -0.11 + 0.13, z: 0.04 },
-      rotationY: 0.28,
+      position: { x: -0.20, y: -0.11 + 0.065, z: 0.06 },
+      rotationY: 0.22,
     },
     {
       title: 'GENERAL GRAINS',
@@ -135,13 +137,13 @@ function buildScene() {
       brand: 'General Grains R&D',
       gradient: ['#9227ff', '#f94892'],
       short: 'GEN GRAINS',
-      width: 0.13,
-      height: 0.22,
-      depth: 0.050,
+      width: 0.09,
+      height: 0.11,
+      depth: 0.028,
       topColor: 0xfdf0ff,
       bottomColor: 0x7a2078,
-      position: { x: -0.16, y: -0.11 + 0.11, z: 0.09 },
-      rotationY: 0.07,
+      position: { x: -0.12, y: -0.11 + 0.055, z: 0.10 },
+      rotationY: 0.06,
     },
   ];
 
@@ -157,7 +159,7 @@ function buildScene() {
     new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide })
   );
   bowl.rotation.x = Math.PI;
-  bowl.position.set(0.36, -0.075, 0.16);
+  bowl.position.set(0.22, -0.075, 0.12);
   bowl.castShadow = true;
   bowl.receiveShadow = true;
   scene.add(bowl);
@@ -166,7 +168,7 @@ function buildScene() {
     new THREE.CylinderGeometry(0.036, 0.03, 0.008, 20),
     new THREE.MeshLambertMaterial({ color: 0xf5f5f5 })
   );
-  milk.position.set(0.36, -0.070, 0.16);
+  milk.position.set(0.22, -0.070, 0.12);
   milk.receiveShadow = true;
   scene.add(milk);
 
@@ -174,7 +176,7 @@ function buildScene() {
     new THREE.CylinderGeometry(0.004, 0.004, 0.09, 8),
     new THREE.MeshLambertMaterial({ color: 0xd0d0d0 })
   );
-  spoon.position.set(0.45, -0.105, 0.22);
+  spoon.position.set(0.28, -0.105, 0.17);
   spoon.rotation.z = 0.45;
   spoon.rotation.x = 0.1;
   spoon.castShadow = true;
@@ -185,7 +187,7 @@ function buildScene() {
     new THREE.MeshStandardMaterial({ color: 0xe7cfa8, roughness: 0.85 })
   );
   placemat.rotation.x = -Math.PI / 2;
-  placemat.position.set(0.36, -0.108, 0.16);
+  placemat.position.set(0.22, -0.108, 0.12);
   placemat.receiveShadow = true;
   scene.add(placemat);
 
@@ -193,7 +195,7 @@ function buildScene() {
     new THREE.CylinderGeometry(0.045, 0.06, 0.025, 24),
     new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.25 })
   );
-  fruitBowl.position.set(-0.32, -0.094, 0.12);
+  fruitBowl.position.set(-0.22, -0.094, 0.10);
   fruitBowl.castShadow = true;
   fruitBowl.receiveShadow = true;
   scene.add(fruitBowl);
@@ -233,8 +235,8 @@ function tick() {
   } else if (camera) {
     useOffAxis = false;
     autoAngle += 0.004;
-    const idleRadius = CFG.viewDist * CFG.ws + 0.55;
-    camera.position.set(Math.sin(autoAngle) * 0.05, 0.02, idleRadius);
+    const idleRadius = CFG.viewDist * CFG.ws;      // same z as tracking mode
+    camera.position.set(Math.sin(autoAngle) * 0.04, 0.02, idleRadius);
     camera.lookAt(0, -0.04, 0);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
