@@ -6,6 +6,7 @@ let renderer;
 let autoAngle = 0;
 let useOffAxis = false;
 let trackingSnapshot = () => ({ tracking: false, pose: null });
+let textureLoader;
 
 export function bootScene(getTrackingState) {
   trackingSnapshot = getTrackingState;
@@ -18,9 +19,12 @@ function buildScene() {
   scene = new THREE.Scene();
   scene.background = null;
   scene.fog = new THREE.Fog(0x120a16, 0.2, 4.5);
+  textureLoader = new THREE.TextureLoader();
 
+  const baseViewDist = CFG.viewDist * CFG.ws;
   camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, CFG.near, CFG.far);
-  camera.position.set(0, 0, CFG.viewDist * CFG.ws);
+  camera.position.set(0, 0.04, baseViewDist + 0.35);
+  camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setSize(innerWidth, innerHeight);
@@ -53,12 +57,15 @@ function buildScene() {
   accent.position.set(0.35, 0.5, 0.4);
   scene.add(accent);
 
+  const placeholderKitchen = makeKitchenBackdropTex();
   const kitchenBackdrop = new THREE.Mesh(
-    new THREE.PlaneGeometry(3.8, 2.3),
-    new THREE.MeshLambertMaterial({ map: makeKitchenBackdropTex() })
+    new THREE.PlaneGeometry(4.8, 2.7),
+    new THREE.MeshStandardMaterial({ map: placeholderKitchen, roughness: 0.95, metalness: 0.04 })
   );
-  kitchenBackdrop.position.set(0, 0.45, -1.25);
+  kitchenBackdrop.position.set(0, 0.55, -1.8);
   scene.add(kitchenBackdrop);
+  scene.background = placeholderKitchen;
+  loadKitchenTexture(kitchenBackdrop.material);
 
   const backsplash = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, 0.7),
@@ -92,12 +99,12 @@ function buildScene() {
 
   const BW = 0.044; const BH = 0.145; const BD = 0.018;
   const heroBox = new THREE.Mesh(new THREE.BoxGeometry(BW, BH, BD), [
-    new THREE.MeshLambertMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200') }),
-    new THREE.MeshLambertMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200') }),
-    new THREE.MeshLambertMaterial({ map: makeTopTex() }),
-    new THREE.MeshLambertMaterial({ map: makeBotTex() }),
-    new THREE.MeshLambertMaterial({ map: makeFrontTex() }),
-    new THREE.MeshLambertMaterial({ map: makeBackTex() }),
+    new THREE.MeshStandardMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200'), roughness: 0.5, metalness: 0.08 }),
+    new THREE.MeshStandardMaterial({ map: makeSideTex('DEPTHCRUNCH', '#ff6600', '#cc2200'), roughness: 0.5, metalness: 0.08 }),
+    new THREE.MeshStandardMaterial({ map: makeTopTex(), roughness: 0.4, metalness: 0.12 }),
+    new THREE.MeshStandardMaterial({ map: makeBotTex(), roughness: 0.55, metalness: 0.08 }),
+    new THREE.MeshStandardMaterial({ map: makeFrontTex(), roughness: 0.32, metalness: 0.1 }),
+    new THREE.MeshStandardMaterial({ map: makeBackTex(), roughness: 0.35, metalness: 0.08 }),
   ]);
   heroBox.position.set(0, -0.108 + BH / 2, -0.02);
   heroBox.castShadow = true;
@@ -225,8 +232,9 @@ function tick() {
   } else if (camera) {
     useOffAxis = false;
     autoAngle += 0.004;
-    camera.position.set(Math.sin(autoAngle) * 0.04, 0, CFG.viewDist * CFG.ws);
-    camera.lookAt(0, 0, 0);
+    const idleRadius = CFG.viewDist * CFG.ws + 0.35;
+    camera.position.set(Math.sin(autoAngle) * 0.08, 0.02, idleRadius);
+    camera.lookAt(0, -0.02, 0);
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
   }
@@ -259,6 +267,36 @@ function applyOffAxis(cam, pose) {
   cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
   cam.position.set(ex, ey, ez);
   cam.lookAt(ex, ey, 0);
+}
+
+function loadKitchenTexture(targetMat) {
+  if (!textureLoader) return;
+  textureLoader.load(
+    './assets/kitchen-backdrop.png',
+    (tex) => {
+      finalizeTexture(tex);
+      targetMat.map = tex;
+      targetMat.needsUpdate = true;
+      scene.background = tex;
+    },
+    undefined,
+    () => {
+      if (!targetMat.map) {
+        const fallback = makeKitchenBackdropTex();
+        targetMat.map = fallback;
+        targetMat.needsUpdate = true;
+        scene.background = fallback;
+      }
+    }
+  );
+}
+
+function finalizeTexture(tex) {
+  if (!tex) return tex;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 function mkCtx(w, h) {
@@ -398,7 +436,7 @@ function makeFrontTex() {
   ctx.fillStyle = '#fff';
   ctx.font = `${W * 0.038}px Arial,sans-serif`;
   ctx.fillText('NET WT 12 OZ (340g)', W / 2, H * 0.958);
-  return new THREE.CanvasTexture(c);
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeBackTex() {
@@ -435,7 +473,7 @@ function makeBackTex() {
     wrapText(ctx, step.d, W * 0.27, cy + H * 0.02, W * 0.62, H * 0.05);
     ctx.textAlign = 'center';
   });
-  return new THREE.CanvasTexture(c);
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeSideTex(label, c1, c2) {
@@ -457,7 +495,7 @@ function makeSideTex(label, c1, c2) {
   ctx.textBaseline = 'middle';
   ctx.fillText(label, 0, 0);
   ctx.restore();
-  return new THREE.CanvasTexture(c);
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeTopTex() {
@@ -469,7 +507,7 @@ function makeTopTex() {
   ctx.textBaseline = 'middle';
   ctx.font = `bold ${H * 0.52}px 'Arial Black',Impact,sans-serif`;
   ctx.fillText('DEPTHCRUNCH', W / 2, H / 2);
-  return new THREE.CanvasTexture(c);
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeBotTex() {
@@ -487,7 +525,7 @@ function makeBotTex() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.fillText('0 12345 67890 5', W / 2, H * 0.73);
-  return new THREE.CanvasTexture(c);
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeKitchenBackdropTex() {
@@ -547,10 +585,7 @@ function makeKitchenBackdropTex() {
   ctx.fillStyle = counterGrad;
   ctx.fillRect(0, tileY + tileH, W, H - (tileY + tileH));
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function makeVariantTex(cfg) {
@@ -604,22 +639,27 @@ function makeVariantTex(cfg) {
   ctx.closePath();
   ctx.fill();
 
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  return tex;
+  return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
 function createVariantBox(cfg) {
   const geometry = new THREE.BoxGeometry(cfg.width, cfg.height, cfg.depth);
-  const matFront = new THREE.MeshLambertMaterial({ map: makeVariantTex({ ...cfg, side: 'front' }) });
-  const matBack = new THREE.MeshLambertMaterial({ map: makeVariantTex({ ...cfg, side: 'back' }) });
+  const matFront = new THREE.MeshStandardMaterial({
+    map: makeVariantTex({ ...cfg, side: 'front' }),
+    roughness: 0.45,
+    metalness: 0.08,
+  });
+  const matBack = new THREE.MeshStandardMaterial({
+    map: makeVariantTex({ ...cfg, side: 'back' }),
+    roughness: 0.45,
+    metalness: 0.08,
+  });
   const sideTex = makeSideTex(cfg.short, cfg.gradient[0], cfg.gradient[1]);
   const mats = [
-    new THREE.MeshLambertMaterial({ map: sideTex }),
-    new THREE.MeshLambertMaterial({ map: sideTex }),
-    new THREE.MeshLambertMaterial({ color: cfg.topColor || 0xfff0d2 }),
-    new THREE.MeshLambertMaterial({ color: cfg.bottomColor || 0xb85529 }),
+    new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.52, metalness: 0.06 }),
+    new THREE.MeshStandardMaterial({ map: sideTex, roughness: 0.52, metalness: 0.06 }),
+    new THREE.MeshStandardMaterial({ color: cfg.topColor || 0xfff0d2, roughness: 0.38, metalness: 0.12 }),
+    new THREE.MeshStandardMaterial({ color: cfg.bottomColor || 0xb85529, roughness: 0.6, metalness: 0.05 }),
     matFront,
     matBack,
   ];
