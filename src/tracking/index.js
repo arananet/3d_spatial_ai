@@ -3,6 +3,7 @@ import { smoothPose } from '../config/index.js';
 export async function startTracking({ onPose, onTrackingLost, onLoadMessage, onReady }) {
   const vid = document.getElementById('vid');
   const fc = document.getElementById('fc');
+  const facePreviewPanel = document.getElementById('face-preview');
   const fcx = fc.getContext('2d');
   let lostFrames = 0;
   let hasTracking = false;
@@ -14,7 +15,7 @@ export async function startTracking({ onPose, onTrackingLost, onLoadMessage, onR
 
   onLoadMessage?.('Requesting camera…');
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 } },
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
     audio: false,
   });
   vid.srcObject = stream;
@@ -42,9 +43,9 @@ export async function startTracking({ onPose, onTrackingLost, onLoadMessage, onR
   faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
   faceMesh.onResults((res) => handleResults(res));
 
-  fc.width = 150;
-  fc.height = 110;
-  fc.style.display = 'block';
+  fc.width = 220;
+  fc.height = 140;
+  facePreviewPanel?.classList.add('active');
 
   let busy = false;
   function loop() {
@@ -93,18 +94,59 @@ function extractPose(lm) {
 
 function renderPreview(res, canvas, ctx) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#050712';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = 'rgba(255,255,255,.08)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, 0.5, canvas.width - 1, canvas.height - 1);
+
+  if (res?.image) {
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.35;
+    ctx.drawImage(res.image, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  const landmarks = res.multiFaceLandmarks && res.multiFaceLandmarks[0];
+  if (!landmarks) {
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.font = '10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Center your face', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
   ctx.save();
+  ctx.translate(canvas.width, 0);
   ctx.scale(-1, 1);
-  ctx.translate(-canvas.width, 0);
-  ctx.drawImage(res.image, 0, 0, canvas.width, canvas.height);
+  const connectors = window.FACEMESH_TESSELATION;
+  if (window.drawConnectors && connectors) {
+    window.drawConnectors(ctx, landmarks, connectors, { color: '#5bffe1', lineWidth: 0.5 });
+    window.drawLandmarks?.(ctx, landmarks, { color: '#ffffff', radius: 0.4 });
+  } else {
+    drawFallbackMesh(ctx, canvas, landmarks);
+  }
   ctx.restore();
-  if (res.multiFaceLandmarks && res.multiFaceLandmarks.length > 0) {
-    ctx.fillStyle = 'rgba(0,255,120,.5)';
-    for (const p of res.multiFaceLandmarks[0]) {
-      ctx.beginPath();
-      ctx.arc((1 - p.x) * canvas.width, p.y * canvas.height, 0.9, 0, Math.PI * 2);
-      ctx.fill();
-    }
+}
+
+function drawFallbackMesh(ctx, canvas, landmarks) {
+  ctx.strokeStyle = 'rgba(91,255,225,.5)';
+  ctx.lineWidth = 0.5;
+  for (let i = 1; i < landmarks.length; i++) {
+    const prev = landmarks[i - 1];
+    const curr = landmarks[i];
+    ctx.beginPath();
+    ctx.moveTo(prev.x * canvas.width, prev.y * canvas.height);
+    ctx.lineTo(curr.x * canvas.width, curr.y * canvas.height);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#ffffff';
+  for (const p of landmarks) {
+    ctx.beginPath();
+    ctx.arc(p.x * canvas.width, p.y * canvas.height, 0.7, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 

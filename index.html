@@ -38,14 +38,32 @@
       filter: saturate(1.15) contrast(1.05);
     }
 
-    #fc {
+    .face-preview {
       position: fixed; bottom: 24px; right: 24px;
-      width: 150px; height: 110px; border-radius: 16px;
-      border: 1px solid var(--border);
-      box-shadow: 0 18px 45px rgba(0,0,0,.45);
-      background: rgba(5,6,12,.85);
-      display: none; z-index: 12; overflow: hidden;
-      backdrop-filter: blur(12px);
+      width: 190px; height: 140px; border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: 0 18px 45px rgba(0,0,0,.55);
+      background: radial-gradient(circle at 20% 20%, rgba(15,18,35,.95), rgba(4,6,12,.98));
+      z-index: 12; overflow: hidden;
+      backdrop-filter: blur(18px);
+      opacity: 0; transform: translateY(12px) scale(.94);
+      transition: opacity .25s ease, transform .25s ease;
+      pointer-events: none;
+    }
+    .face-preview.active {
+      opacity: 1;
+      transform: none;
+    }
+    .face-preview canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; display: block;
+    }
+    .face-preview__label {
+      position: absolute;
+      top: 10px; left: 14px;
+      font-size: 11px; letter-spacing: .3em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.7);
     }
 
     #status {
@@ -164,7 +182,11 @@
       #status, #brand-strip { left: 16px; right: 16px; top: 16px; }
       #brand-strip { display: none; }
       #hint { bottom: 16px; font-size: 12px; letter-spacing: .2em; }
-      #fc { display: none !important; }
+      .face-preview {
+        width: 150px; height: 110px;
+        bottom: 12px; right: 12px;
+      }
+      .face-preview__label { font-size: 10px; letter-spacing: .2em; }
       .card { padding: 2rem; }
     }
   </style>
@@ -174,7 +196,10 @@
 <canvas id="c3d"></canvas>
 <!-- video must be in DOM; playsinline + muted are required for iOS -->
 <video id="vid" playsinline muted hidden></video>
-<canvas id="fc"></canvas>
+<div id="face-preview" class="face-preview">
+  <canvas id="fc"></canvas>
+  <span class="face-preview__label">Front mesh</span>
+</div>
 <div id="status"><div id="dot"></div><span id="stxt">Loading…</span></div>
 <div id="brand-strip">Concept preview <span>DepthCrunch</span> x <span>General Grains</span> x <span>Kellogg Studio</span></div>
 <div id="hint">Glide your head to peek behind the box</div>
