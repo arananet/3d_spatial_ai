@@ -15,6 +15,7 @@ COPY --from=deps /build/three.min.js /usr/share/nginx/html/three.min.js
 COPY index.html    /usr/share/nginx/html/index.html
 COPY manifest.json /usr/share/nginx/html/manifest.json
 COPY icon.svg      /usr/share/nginx/html/icon.svg
+COPY src           /usr/share/nginx/html/src
 
 RUN printf 'server {\n\
     listen ${PORT};\n\

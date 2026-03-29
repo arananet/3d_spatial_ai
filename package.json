@@ -1,0 +1,22 @@
+{
+  "name": "3d_spatial_ai",
+  "version": "1.0.0",
+  "description": "DepthCrunch is a browser-based spatial packaging demo that turns a flat cereal box into a head-tracked 3D portal. The current prototype mixes MediaPipe-style facial landmark tracking (loaded via TensorFlow.js) and an off-axis Three.js camera to fake holographic depth on any phone or tablet. Everything runs locally inside `index.html`, is served by nginx through the provided Docker image, and needs significant refactoring before it can ship to production.",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint src --ext js",
+    "lint:fix": "eslint src --ext js --fix",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "globals": "^17.4.0",
+    "vitest": "^3.2.4"
+  },
+  "type": "module"
+}
