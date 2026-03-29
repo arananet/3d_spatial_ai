@@ -10,8 +10,8 @@ const BASE_CFG = {
   screenH: getLocalNumber('dc_sh', 19),
   viewDist: getLocalNumber('dc_vd', 60),
   ws: 0.01,
-  moveScale: 3.6,
-  smooth: 0.18,
+  moveScale: 5.5,
+  smooth: 0.32,
   near: 0.005,
   far: 20,
 };
@@ -19,11 +19,11 @@ const BASE_CFG = {
 export const CFG = Object.freeze(BASE_CFG);
 
 export const HEAD_RESP = Object.freeze({
-  deadX: 0.01,
-  deadY: 0.015,
-  curveX: 1.35,
-  curveY: 1.55,
-  max: 0.52,
+  deadX: 0.004,
+  deadY: 0.006,
+  curveX: 1.9,
+  curveY: 2.1,
+  max: 0.58,
 });
 
 const smoothedPose = { x: 0.5, y: 0.5, z: 1 };
