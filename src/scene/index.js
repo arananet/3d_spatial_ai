@@ -18,7 +18,7 @@ function buildScene() {
   const canvas = document.getElementById('c3d');
   scene = new THREE.Scene();
   scene.background = null;
-  scene.fog = new THREE.Fog(0xf2e8d8, 1.2, 5.0);
+  scene.fog = new THREE.Fog(0x0a0604, 1.5, 5.0);
   textureLoader = new THREE.TextureLoader();
 
   const baseViewDist = CFG.viewDist * CFG.ws;
@@ -33,50 +33,51 @@ function buildScene() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.35;
   renderer.physicallyCorrectLights = true;
 
-  scene.add(new THREE.HemisphereLight(0xfff4de, 0x0b0307, 0.45));
-  const sun = new THREE.DirectionalLight(0xfff4e0, 1.25);
-  sun.position.set(0.9, 1.6, 1.2);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.near = 0.1;
-  sun.shadow.camera.far = 3;
-  sun.shadow.camera.left = -1;
-  sun.shadow.camera.right = 1;
-  sun.shadow.camera.top = 1;
-  sun.shadow.camera.bottom = -1;
-  scene.add(sun);
+  // Chocolate table lighting — dramatic studio product-photography feel
+  scene.add(new THREE.HemisphereLight(0x1a0c05, 0x040201, 0.12));
 
-  const fill = new THREE.SpotLight(0x9fdcff, 0.55, 4, Math.PI / 4, 0.4, 0.7);
-  fill.position.set(-1.2, 0.7, 0.6);
-  scene.add(fill);
+  // Key light — warm amber from upper-right (like a ring/beauty dish)
+  const keyLight = new THREE.SpotLight(0xff9535, 3.2, 4.5, Math.PI / 5, 0.28, 1.1);
+  keyLight.position.set(0.75, 1.5, 0.9);
+  keyLight.target.position.set(0, -0.08, 0);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.set(2048, 2048);
+  keyLight.shadow.camera.near = 0.1;
+  keyLight.shadow.camera.far = 4;
+  keyLight.shadow.camera.left = -1;
+  keyLight.shadow.camera.right = 1;
+  keyLight.shadow.camera.top = 1;
+  keyLight.shadow.camera.bottom = -1;
+  scene.add(keyLight);
+  scene.add(keyLight.target);
 
-  const accent = new THREE.PointLight(0xff935c, 0.65, 2.5);
-  accent.position.set(0.35, 0.5, 0.4);
-  scene.add(accent);
+  // Rim light — warm orange from behind-left (separation/edge glow)
+  const rimLight = new THREE.SpotLight(0xff5a10, 1.6, 4, Math.PI / 4, 0.5, 1.4);
+  rimLight.position.set(-1.0, 0.9, -0.6);
+  rimLight.target.position.set(0, -0.08, 0);
+  scene.add(rimLight);
+  scene.add(rimLight.target);
 
-  const placeholderKitchen = makeKitchenBackdropTex();
-  // Use procedural kitchen directly — avoids PNG override with stale asset
-  scene.background = placeholderKitchen;
-  const kitchenBackdrop = new THREE.Mesh(
+  // Warm fill — soft bounce light from front-left
+  const fillGlow = new THREE.PointLight(0xff7822, 0.45, 2.2);
+  fillGlow.position.set(-0.4, 0.35, 0.7);
+  scene.add(fillGlow);
+
+  const chocoBg = makeChocolateBackdropTex();
+  scene.background = chocoBg;
+  const chocoBackdrop = new THREE.Mesh(
     new THREE.PlaneGeometry(8.0, 5.0),
-    new THREE.MeshStandardMaterial({ map: placeholderKitchen, roughness: 0.95, metalness: 0.04 })
+    new THREE.MeshStandardMaterial({ map: chocoBg, roughness: 0.98, metalness: 0.0, emissive: 0x0a0402, emissiveIntensity: 0.15 })
   );
-  kitchenBackdrop.position.set(0, 0.30, -1.8);
-  scene.add(kitchenBackdrop);
-
-  const backsplash = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0xf9efe3, roughness: 0.9, metalness: 0.02 })
-  );
-  backsplash.position.set(0, 0.05, -0.18);
-  scene.add(backsplash);
+  chocoBackdrop.position.set(0, 0.30, -1.8);
+  scene.add(chocoBackdrop);
 
   const counterTop = new THREE.Mesh(
     new THREE.PlaneGeometry(2.4, 1.4),
-    new THREE.MeshStandardMaterial({ color: 0xb3764a, roughness: 0.45, metalness: 0.1 })
+    new THREE.MeshStandardMaterial({ color: 0x1a0d08, roughness: 0.08, metalness: 0.45, envMapIntensity: 1.2 })
   );
   counterTop.rotation.x = -Math.PI / 2;
   counterTop.position.set(0, -0.11, 0.18);
@@ -85,14 +86,14 @@ function buildScene() {
 
   const counterBody = new THREE.Mesh(
     new THREE.BoxGeometry(2.4, 0.26, 1.05),
-    new THREE.MeshLambertMaterial({ color: 0x4a2b1c })
+    new THREE.MeshLambertMaterial({ color: 0x0d0806 })
   );
   counterBody.position.set(0, -0.25, 0.15);
   scene.add(counterBody);
 
   const underGlow = new THREE.Mesh(
     new THREE.BoxGeometry(2.3, 0.01, 0.08),
-    new THREE.MeshBasicMaterial({ color: 0xfff0cf })
+    new THREE.MeshBasicMaterial({ color: 0xff6e10 })
   );
   underGlow.position.set(0, 0.34, -0.2);
   scene.add(underGlow);
@@ -184,7 +185,7 @@ function buildScene() {
 
   const placemat = new THREE.Mesh(
     new THREE.CircleGeometry(0.11, 40),
-    new THREE.MeshStandardMaterial({ color: 0xe7cfa8, roughness: 0.85 })
+    new THREE.MeshStandardMaterial({ color: 0x2a1508, roughness: 0.88 })
   );
   placemat.rotation.x = -Math.PI / 2;
   placemat.position.set(0.22, -0.108, 0.12);
@@ -193,7 +194,7 @@ function buildScene() {
 
   const fruitBowl = new THREE.Mesh(
     new THREE.CylinderGeometry(0.045, 0.06, 0.025, 24),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.25 })
+    new THREE.MeshStandardMaterial({ color: 0x1a1008, metalness: 0.75, roughness: 0.18 })
   );
   fruitBowl.position.set(-0.22, -0.094, 0.10);
   fruitBowl.castShadow = true;
@@ -203,12 +204,12 @@ function buildScene() {
 
   const mug = new THREE.Mesh(
     new THREE.CylinderGeometry(0.025, 0.025, 0.07, 32),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.15 })
+    new THREE.MeshStandardMaterial({ color: 0x1a0e08, metalness: 0.05, roughness: 0.72 })
   );
   mug.position.set(-0.24, -0.075, -0.02);
   const handle = new THREE.Mesh(
     new THREE.TorusGeometry(0.024, 0.004, 8, 20),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.15 })
+    new THREE.MeshStandardMaterial({ color: 0x1a0e08, metalness: 0.05, roughness: 0.72 })
   );
   handle.rotation.y = Math.PI / 2;
   handle.position.set(0.028, 0, 0);
@@ -583,216 +584,90 @@ function makeBotTex() {
   return finalizeTexture(new THREE.CanvasTexture(c));
 }
 
-function makeKitchenBackdropTex() {
+function makeChocolateBackdropTex() {
   const W = 2048; const H = 1152; const [c, ctx] = mkCtx(W, H);
 
-  // ── Warm cream wall ──────────────────────────────────────────────────────
-  const wallGrad = ctx.createLinearGradient(0, 0, 0, H);
-  wallGrad.addColorStop(0, '#f8f0e4');
-  wallGrad.addColorStop(0.55, '#f2e8d8');
-  wallGrad.addColorStop(1, '#ddc8ae');
-  ctx.fillStyle = wallGrad; ctx.fillRect(0, 0, W, H);
+  // ── Deep dark chocolate base ─────────────────────────────────────────────
+  const bgGrad = ctx.createRadialGradient(W * 0.5, H * 0.38, H * 0.05, W * 0.5, H * 0.42, W * 0.88);
+  bgGrad.addColorStop(0, '#2e1508');
+  bgGrad.addColorStop(0.38, '#180a04');
+  bgGrad.addColorStop(0.75, '#0e0603');
+  bgGrad.addColorStop(1, '#060302');
+  ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
 
-  // Subtle wall texture (soft vertical stripes)
+  // ── Warm amber key-light bloom — upper-right (primary light source) ──────
+  const bloom1 = ctx.createRadialGradient(W * 0.74, H * 0.18, 0, W * 0.74, H * 0.20, W * 0.46);
+  bloom1.addColorStop(0,   'rgba(255,165,45,0.22)');
+  bloom1.addColorStop(0.35,'rgba(255,105,15,0.10)');
+  bloom1.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = bloom1; ctx.fillRect(0, 0, W, H);
+
+  // ── Secondary warm fill — left side ──────────────────────────────────────
+  const bloom2 = ctx.createRadialGradient(W * 0.16, H * 0.32, 0, W * 0.16, H * 0.32, W * 0.36);
+  bloom2.addColorStop(0,   'rgba(200,85,15,0.13)');
+  bloom2.addColorStop(0.5, 'rgba(160,55,8,0.05)');
+  bloom2.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = bloom2; ctx.fillRect(0, 0, W, H);
+
+  // ── Horizontal warm band — studio product backlight strip ─────────────────
+  const band = ctx.createLinearGradient(0, H * 0.24, 0, H * 0.58);
+  band.addColorStop(0,    'rgba(0,0,0,0)');
+  band.addColorStop(0.30, 'rgba(130,50,8,0.14)');
+  band.addColorStop(0.55, 'rgba(90,28,4,0.09)');
+  band.addColorStop(1,    'rgba(0,0,0,0)');
+  ctx.fillStyle = band; ctx.fillRect(0, H * 0.24, W, H * 0.34);
+
+  // ── Soft bokeh orbs — out-of-focus warm lights ────────────────────────────
+  const bokehOrbs = [
+    { x: W * 0.10, y: H * 0.14, r: W * 0.12, a: 0.09, col: '255,160,40' },
+    { x: W * 0.82, y: H * 0.10, r: W * 0.16, a: 0.10, col: '255,135,20' },
+    { x: W * 0.94, y: H * 0.50, r: W * 0.10, a: 0.07, col: '230,95,12' },
+    { x: W * 0.04, y: H * 0.58, r: W * 0.09, a: 0.06, col: '190,75,10' },
+    { x: W * 0.56, y: H * 0.06, r: W * 0.08, a: 0.07, col: '255,175,55' },
+    { x: W * 0.38, y: H * 0.12, r: W * 0.07, a: 0.05, col: '210,110,28' },
+    { x: W * 0.66, y: H * 0.70, r: W * 0.06, a: 0.04, col: '160,60,8'   },
+    { x: W * 0.26, y: H * 0.72, r: W * 0.08, a: 0.05, col: '200,85,15'  },
+  ];
+  for (const orb of bokehOrbs) {
+    const g = ctx.createRadialGradient(orb.x, orb.y, 0, orb.x, orb.y, orb.r);
+    g.addColorStop(0,   `rgba(${orb.col},${orb.a})`);
+    g.addColorStop(0.55,`rgba(${orb.col},${orb.a * 0.35})`);
+    g.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+
+  // ── Fine film-grain / noise ───────────────────────────────────────────────
   ctx.save();
-  for (let i = 0; i < 80; i++) {
-    const x = (i / 80) * W;
-    ctx.fillStyle = `rgba(${i % 2 ? 255 : 200},220,180,0.018)`;
-    ctx.fillRect(x, 0, W / 80, H);
+  for (let i = 0; i < 7000; i++) {
+    const gx = Math.random() * W;
+    const gy = Math.random() * H;
+    ctx.fillStyle = `rgba(255,190,100,${Math.random() * 0.022})`;
+    ctx.fillRect(gx, gy, 1, 1);
   }
   ctx.restore();
 
-  // ── Ceiling ──────────────────────────────────────────────────────────────
-  ctx.fillStyle = '#ede4d5';
-  ctx.fillRect(0, 0, W, H * 0.06);
-  // cornice shadow
-  const cornShadow = ctx.createLinearGradient(0, H * 0.06, 0, H * 0.10);
-  cornShadow.addColorStop(0, 'rgba(0,0,0,.10)');
-  cornShadow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = cornShadow; ctx.fillRect(0, H * 0.06, W, H * 0.04);
+  // ── Vignette — deep dark edges and corners ───────────────────────────────
+  const vigL = ctx.createLinearGradient(0, 0, W * 0.22, 0);
+  vigL.addColorStop(0, 'rgba(0,0,0,0.68)'); vigL.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vigL; ctx.fillRect(0, 0, W * 0.22, H);
 
-  // ── Upper cabinets ───────────────────────────────────────────────────────
-  const cabY = H * 0.065; const cabH = H * 0.305; const cabBottom = cabY + cabH;
-  const cabColor = '#f5ede0';
-  const cabBorder = '#d8c8b0';
+  const vigR = ctx.createLinearGradient(W, 0, W * 0.78, 0);
+  vigR.addColorStop(0, 'rgba(0,0,0,0.68)'); vigR.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vigR; ctx.fillRect(W * 0.78, 0, W * 0.22, H);
 
-  // Cabinet body shadow
-  ctx.fillStyle = 'rgba(0,0,0,.06)';
-  ctx.fillRect(W * 0.02, cabBottom, W * 0.96, H * 0.018);
+  const vigT = ctx.createLinearGradient(0, 0, 0, H * 0.22);
+  vigT.addColorStop(0, 'rgba(0,0,0,0.55)'); vigT.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vigT; ctx.fillRect(0, 0, W, H * 0.22);
 
-  function drawCabDoor(dx, dy, dw, dh) {
-    // Door body
-    const doorGrad = ctx.createLinearGradient(dx, dy, dx + dw, dy + dh);
-    doorGrad.addColorStop(0, '#faf4eb');
-    doorGrad.addColorStop(1, '#ede3d4');
-    ctx.fillStyle = doorGrad;
-    ctx.beginPath(); rrect(ctx, dx, dy, dw, dh, 6); ctx.closePath(); ctx.fill();
-    // Border
-    ctx.strokeStyle = cabBorder; ctx.lineWidth = 1.5;
-    ctx.beginPath(); rrect(ctx, dx, dy, dw, dh, 6); ctx.stroke();
-    // Inner inset panel
-    ctx.strokeStyle = 'rgba(0,0,0,.07)'; ctx.lineWidth = 1;
-    ctx.beginPath(); rrect(ctx, dx + 10, dy + 10, dw - 20, dh - 20, 4); ctx.stroke();
-    // Bar handle
-    const hx = dx + dw * 0.5 - 18; const hy = dy + dh - 22;
-    ctx.fillStyle = '#c0a888'; ctx.beginPath();
-    rrect(ctx, hx, hy, 36, 6, 3); ctx.fill();
-    // handle highlight
-    ctx.fillStyle = 'rgba(255,255,255,.45)';
-    ctx.beginPath(); rrect(ctx, hx + 2, hy + 1, 32, 2, 1); ctx.fill();
-  }
+  const vigB = ctx.createLinearGradient(0, H, 0, H * 0.72);
+  vigB.addColorStop(0, 'rgba(0,0,0,0.62)'); vigB.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = vigB; ctx.fillRect(0, H * 0.72, W, H * 0.28);
 
-  // Left cabinet block (3 doors)
-  ctx.fillStyle = '#f0e6d8'; ctx.fillRect(0, cabY, W * 0.30, cabH);
-  ctx.strokeStyle = cabBorder; ctx.lineWidth = 1;
-  ctx.strokeRect(0, cabY, W * 0.30, cabH);
-  drawCabDoor(W * 0.015, cabY + H * 0.018, W * 0.085, cabH - H * 0.036);
-  drawCabDoor(W * 0.112, cabY + H * 0.018, W * 0.085, cabH - H * 0.036);
-  drawCabDoor(W * 0.209, cabY + H * 0.018, W * 0.075, cabH - H * 0.036);
-
-  // Right cabinet block (3 doors)
-  ctx.fillStyle = '#f0e6d8'; ctx.fillRect(W * 0.70, cabY, W * 0.30, cabH);
-  ctx.strokeStyle = cabBorder; ctx.lineWidth = 1;
-  ctx.strokeRect(W * 0.70, cabY, W * 0.30, cabH);
-  drawCabDoor(W * 0.712, cabY + H * 0.018, W * 0.075, cabH - H * 0.036);
-  drawCabDoor(W * 0.799, cabY + H * 0.018, W * 0.085, cabH - H * 0.036);
-  drawCabDoor(W * 0.896, cabY + H * 0.018, W * 0.088, cabH - H * 0.036);
-
-  // Cabinet underside (thin dark strip)
-  ctx.fillStyle = '#c4a880'; ctx.fillRect(0, cabBottom, W, H * 0.008);
-
-  // Under-cabinet LED glow
-  const ledGrad = ctx.createLinearGradient(0, cabBottom + H * 0.008, 0, cabBottom + H * 0.06);
-  ledGrad.addColorStop(0, 'rgba(255,240,200,.22)');
-  ledGrad.addColorStop(1, 'rgba(255,240,200,0)');
-  ctx.fillStyle = ledGrad; ctx.fillRect(0, cabBottom + H * 0.008, W, H * 0.06);
-
-  // ── Window (centre) ─────────────────────────────────────────────────────
-  const winX = W * 0.33; const winY = H * 0.07;
-  const winW = W * 0.34; const winH = H * 0.30;
-  // Window frame
-  ctx.fillStyle = '#ffffff'; ctx.fillRect(winX - 12, winY - 8, winW + 24, winH + 16);
-  // Sky gradient
-  const sky = ctx.createLinearGradient(0, winY, 0, winY + winH);
-  sky.addColorStop(0, '#c8e8fc');
-  sky.addColorStop(0.6, '#e8f5ff');
-  sky.addColorStop(1, '#f8fdff');
-  ctx.fillStyle = sky; ctx.fillRect(winX, winY, winW, winH);
-  // Outdoor foliage hint
-  ctx.fillStyle = 'rgba(100,180,80,.22)';
-  ctx.beginPath(); ctx.ellipse(winX + winW * 0.18, winY + winH * 0.85, winW * 0.18, winH * 0.25, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(winX + winW * 0.78, winY + winH * 0.9, winW * 0.14, winH * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-  // Light rays through glass
-  ctx.save(); ctx.globalAlpha = 0.06;
-  for (let i = 0; i < 3; i++) {
-    const rx = winX + winW * (0.2 + i * 0.28);
-    ctx.fillStyle = '#fff8e0';
-    ctx.beginPath(); ctx.moveTo(rx - 20, winY); ctx.lineTo(rx + 20, winY);
-    ctx.lineTo(rx + 80, winY + winH); ctx.lineTo(rx - 80, winY + winH); ctx.closePath(); ctx.fill();
-  }
-  ctx.restore();
-  // Cross bars
-  ctx.fillStyle = '#f8f8f8'; ctx.lineWidth = 0;
-  ctx.fillRect(winX, winY + winH * 0.48, winW, 12); // horizontal
-  ctx.fillRect(winX + winW * 0.488, winY, 12, winH); // vertical
-  // Frame outer shadow
-  ctx.shadowColor = 'rgba(0,0,0,.15)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-  ctx.strokeStyle = '#e0d0bc'; ctx.lineWidth = 2;
-  ctx.strokeRect(winX - 12, winY - 8, winW + 24, winH + 16);
-  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-  // Windowsill
-  const sillY = winY + winH + 8;
-  const sillGrad = ctx.createLinearGradient(0, sillY, 0, sillY + H * 0.025);
-  sillGrad.addColorStop(0, '#e8dcc8'); sillGrad.addColorStop(1, '#cec0a8');
-  ctx.fillStyle = sillGrad; ctx.fillRect(winX - 20, sillY, winW + 40, H * 0.025);
-  // Small potted plant on sill
-  ctx.fillStyle = '#8b5e3c';
-  ctx.beginPath(); rrect(ctx, winX + winW * 0.60, sillY - H * 0.04, W * 0.028, H * 0.04, 3); ctx.fill();
-  ctx.fillStyle = '#3a8a28';
-  ctx.beginPath(); ctx.ellipse(winX + winW * 0.614, sillY - H * 0.07, W * 0.018, H * 0.04, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(winX + winW * 0.62, sillY - H * 0.09, W * 0.012, H * 0.03, 0.3, 0, Math.PI * 2); ctx.fill();
-
-  // ── Subway tile backsplash ──────────────────────────────────────────────
-  const tileZoneY = cabBottom + H * 0.008;
-  const tileZoneH = H * 0.19;
-  ctx.fillStyle = '#f9f3eb'; ctx.fillRect(0, tileZoneY, W, tileZoneH);
-  const tW = 82; const tH = 38; const grout = 4;
-  ctx.strokeStyle = '#ddd4c4'; ctx.lineWidth = grout;
-  for (let row = 0; row * (tH + grout) < tileZoneH + tH; row++) {
-    const offsetX = row % 2 === 0 ? 0 : tW / 2;
-    for (let col = -1; col * (tW + grout) < W + tW; col++) {
-      const tx = col * (tW + grout) + offsetX;
-      const ty = tileZoneY + row * (tH + grout);
-      // slight variation in tile shade
-      const shade = 0.97 + (((row * 17 + col * 11) % 7) / 7) * 0.04;
-      ctx.fillStyle = `rgb(${Math.round(249 * shade)},${Math.round(243 * shade)},${Math.round(235 * shade)})`;
-      ctx.fillRect(tx + grout / 2, ty + grout / 2, tW, tH);
-      ctx.strokeRect(tx + grout / 2, ty + grout / 2, tW, tH);
-      // subtle glaze highlight on each tile
-      ctx.fillStyle = 'rgba(255,255,255,.25)';
-      ctx.fillRect(tx + grout / 2 + 4, ty + grout / 2 + 3, tW - 8, tH * 0.3);
-    }
-  }
-  // Backsplash top highlight line
-  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(0, tileZoneY, W, 2);
-
-  // ── Countertop ──────────────────────────────────────────────────────────
-  const counterY = tileZoneY + tileZoneH;
-  const counterH = H * 0.07;
-  // Dark granite countertop
-  const gGrad = ctx.createLinearGradient(0, counterY, 0, counterY + counterH);
-  gGrad.addColorStop(0, '#4e3425');
-  gGrad.addColorStop(0.25, '#5e4232');
-  gGrad.addColorStop(0.7, '#4a3020');
-  gGrad.addColorStop(1, '#3a2414');
-  ctx.fillStyle = gGrad; ctx.fillRect(0, counterY, W, counterH);
-  // Granite veins
-  ctx.save();
-  for (let i = 0; i < 8; i++) {
-    ctx.strokeStyle = `rgba(200,170,130,${0.04 + Math.random() * 0.06})`;
-    ctx.lineWidth = 0.8 + Math.random() * 1.2;
-    ctx.beginPath();
-    ctx.moveTo(Math.random() * W, counterY);
-    ctx.bezierCurveTo(Math.random() * W, counterY + counterH * 0.3,
-      Math.random() * W, counterY + counterH * 0.7, Math.random() * W, counterY + counterH);
-    ctx.stroke();
-  }
-  ctx.restore();
-  // Counter top highlight
-  ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(0, counterY, W, 3);
-  // Counter edge / lip
-  const edgeH = H * 0.012;
-  const eGrad = ctx.createLinearGradient(0, counterY + counterH, 0, counterY + counterH + edgeH);
-  eGrad.addColorStop(0, '#2e1d10'); eGrad.addColorStop(1, '#1a0e06');
-  ctx.fillStyle = eGrad; ctx.fillRect(0, counterY + counterH, W, edgeH);
-
-  // ── Lower cabinets / drawers ─────────────────────────────────────────────
-  const lowerY = counterY + counterH + edgeH;
-  ctx.fillStyle = '#e8ddd0'; ctx.fillRect(0, lowerY, W, H - lowerY);
-  // Drawer fronts
-  const drawerW = W * 0.14; const drawerGap = W * 0.016;
-  const drawerH = H * 0.12; const drawerY = lowerY + H * 0.018;
-  for (let i = 0; i < 6; i++) {
-    const drx = drawerGap + i * (drawerW + drawerGap);
-    const drGrad = ctx.createLinearGradient(drx, drawerY, drx + drawerW, drawerY + drawerH);
-    drGrad.addColorStop(0, '#f2e8da'); drGrad.addColorStop(1, '#e2d4c2');
-    ctx.fillStyle = drGrad;
-    ctx.beginPath(); rrect(ctx, drx, drawerY, drawerW, drawerH, 5); ctx.fill();
-    ctx.strokeStyle = '#cdc0ad'; ctx.lineWidth = 1;
-    ctx.beginPath(); rrect(ctx, drx, drawerY, drawerW, drawerH, 5); ctx.stroke();
-    // drawer handle
-    const dhx = drx + drawerW * 0.35; const dhy = drawerY + drawerH * 0.82;
-    ctx.fillStyle = '#b8a890';
-    ctx.beginPath(); rrect(ctx, dhx, dhy, drawerW * 0.3, 5, 2); ctx.fill();
-  }
-
-  // ── Subtle ambient occlusion (darken sides & bottom) ────────────────────
-  const aoL = ctx.createLinearGradient(0, 0, W * 0.12, 0);
-  aoL.addColorStop(0, 'rgba(0,0,0,.10)'); aoL.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = aoL; ctx.fillRect(0, 0, W * 0.12, H);
-  const aoR = ctx.createLinearGradient(W, 0, W * 0.88, 0);
-  aoR.addColorStop(0, 'rgba(0,0,0,.10)'); aoR.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = aoR; ctx.fillRect(W * 0.88, 0, W * 0.12, H);
+  // ── Subtle centre brightness lift (keeps boxes readable) ─────────────────
+  const centreLift = ctx.createRadialGradient(W * 0.5, H * 0.48, 0, W * 0.5, H * 0.48, W * 0.32);
+  centreLift.addColorStop(0, 'rgba(80,30,8,0.10)');
+  centreLift.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = centreLift; ctx.fillRect(0, 0, W, H);
 
   return finalizeTexture(new THREE.CanvasTexture(c));
 }
