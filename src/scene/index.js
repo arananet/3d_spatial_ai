@@ -229,10 +229,32 @@ function buildScene() {
 
 function tick() {
   requestAnimationFrame(tick);
-  const snapshot = trackingSnapshot ? trackingSnapshot() : { tracking: false };
-  if (snapshot.tracking && snapshot.pose) {
+  const raw    = observe();
+  const pose   = orient(raw);
+  const action = decide(pose);
+  act(action, pose);
+}
+
+// OODA — Observe: pull the latest head-tracking snapshot from the sensor layer
+function observe() {
+  return trackingSnapshot ? trackingSnapshot() : { tracking: false, pose: null };
+}
+
+// OODA — Orient: derive a usable pose from the snapshot, or null when no face is locked
+function orient(snapshot) {
+  return (snapshot.tracking && snapshot.pose) ? snapshot.pose : null;
+}
+
+// OODA — Decide: select a camera mode based on pose availability
+function decide(pose) {
+  return pose ? 'track' : 'idle';
+}
+
+// OODA — Act: move the camera and render the frame
+function act(action, pose) {
+  if (action === 'track') {
     useOffAxis = true;
-    applyOffAxis(camera, snapshot.pose);
+    applyOffAxis(camera, pose);
   } else if (camera) {
     useOffAxis = false;
     autoAngle += 0.004;
@@ -242,7 +264,6 @@ function tick() {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
   }
-
   if (renderer && scene && camera) {
     renderer.render(scene, camera);
   }

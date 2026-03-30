@@ -63,18 +63,26 @@ export async function startTracking({ onPose, onTrackingLost, onLoadMessage, onR
   onReady?.();
 
   function handleResults(res) {
-    renderPreview(res, fc, fcx);
-    if (res.multiFaceLandmarks && res.multiFaceLandmarks.length > 0) {
-      const pose = smoothPose(extractPose(res.multiFaceLandmarks[0]));
+    // OODA — Observe: raw landmark array from MediaPipe FaceMesh
+    const landmarks = res.multiFaceLandmarks?.[0] ?? null;
+
+    // OODA — Orient: extract and smooth the head pose; null when no face present
+    const pose = landmarks ? smoothPose(extractPose(landmarks)) : null;
+
+    // OODA — Decide: advance the tracking state machine; detect loss after 7 consecutive absent frames
+    const wasTracking = hasTracking;
+    if (pose) {
       hasTracking = true;
       lostFrames = 0;
-      onPose?.(pose);
-    } else {
-      if (hasTracking && ++lostFrames > 6) {
-        hasTracking = false;
-        onTrackingLost?.();
-      }
+    } else if (hasTracking) {
+      if (++lostFrames > 6) hasTracking = false;
     }
+    const justLost = wasTracking && !hasTracking;
+
+    // OODA — Act: update the face preview and fire upstream callbacks
+    renderPreview(res, fc, fcx);
+    if (pose)     onPose?.(pose);
+    if (justLost) onTrackingLost?.();
   }
 }
 
